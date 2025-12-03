@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,9 +10,316 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 1. Users
 model User {
   id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
-  createdAt DateTime @default(now())
+  phone     String?
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  orgMemberships    OrgMembership[]
+  captainedTeams    Team[]             @relation("TeamCaptain")
+  teamMemberships   TeamMember[]
+  registrations     Registration[]
+  playerProfiles    PlayerProfile[]
+  createdTournaments Tournament[]      @relation("TournamentCreator")
+  notifications     Notification[]
+  matchEvents       MatchEvent[]
+
+  @@map("users")
+}
+
+// 2. Organizations
+model Organization {
+  id             Int      @id @default(autoincrement())
+  name           String
+  slug           String   @unique
+  defaultGameId  Int?     @map("default_game_id")
+  branding       Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  defaultGame    Game?          @relation("OrgDefaultGame", fields: [defaultGameId], references: [id])
+  memberships    OrgMembership[]
+  orgGames       OrgGame[]
+  tournaments    Tournament[]
+
+  @@map("organizations")
+}
+
+// 3. Organization Memberships
+model OrgMembership {
+  id        Int      @id @default(autoincrement())
+  orgId     Int      @map("org_id")
+  userId    Int      @map("user_id")
+  role      String   // org_admin | manager
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@map("org_memberships")
+}
+
+// 4. Games
+model Game {
+  id              Int      @id @default(autoincrement())
+  key             String   @unique // pickleball | badminton | tennis
+  name            String
+  defaultSettings Json?    @map("default_settings")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  orgGames          OrgGame[]
+  tournaments       Tournament[]
+  matches           Match[]
+  playerProfiles    PlayerProfile[]
+  defaultForOrgs    Organization[] @relation("OrgDefaultGame")
+
+  @@map("games")
+}
+
+// 5. Organization Games
+model OrgGame {
+  id        Int      @id @default(autoincrement())
+  orgId     Int      @map("org_id")
+  gameId    Int      @map("game_id")
+  settings  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, gameId])
+  @@map("org_games")
+}
+
+// 6. Tournaments
+model Tournament {
+  id                    Int       @id @default(autoincrement())
+  orgId                 Int       @map("org_id")
+  gameId                Int       @map("game_id")
+  name                  String
+  slug                  String
+  description           String?
+  regDeadline           DateTime? @map("reg_deadline")
+  startDate             DateTime? @map("start_date")
+  endDate               DateTime? @map("end_date")
+  courtsCount           Int?      @map("courts_count")
+  matchDurationMinutes  Int?      @map("match_duration_minutes")
+  bufferMinutes         Int?      @map("buffer_minutes")
+  scoringMode           String?   @map("scoring_mode")
+  scorerId              Int?      @map("scorer_id")
+  settings              Json?
+  createdBy             Int       @map("created_by")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  game         Game                 @relation(fields: [gameId], references: [id])
+  creator      User                 @relation("TournamentCreator", fields: [createdBy], references: [id])
+  categories   TournamentCategory[]
+  teams        Team[]
+  registrations Registration[]
+  matches      Match[]
+  playerStats  PlayerStat[]
+
+  @@unique([orgId, slug])
+  @@map("tournaments")
+}
+
+// 7. Tournament Categories
+model TournamentCategory {
+  id                    Int       @id @default(autoincrement())
+  tournamentId          Int       @map("tournament_id")
+  name                  String
+  key                   String
+  entryType             String    @map("entry_type") // individual | team
+  entryLimit            Int?      @map("entry_limit")
+  regDeadline           DateTime? @map("reg_deadline")
+  startDate             DateTime? @map("start_date")
+  endDate               DateTime? @map("end_date")
+  courtsCount           Int?      @map("courts_count")
+  matchDurationMinutes  Int?      @map("match_duration_minutes")
+  bufferMinutes         Int?      @map("buffer_minutes")
+  scoringMode           String?   @map("scoring_mode")
+  scorerIds             Json?     @map("scorer_ids")
+  settings              Json?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  tournament    Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teams         Team[]
+  registrations Registration[]
+  matches       Match[]
+  playerStats   PlayerStat[]
+
+  @@unique([tournamentId, key])
+  @@map("tournament_categories")
+}
+
+// 8. Teams
+model Team {
+  id            Int      @id @default(autoincrement())
+  tournamentId  Int      @map("tournament_id")
+  categoryId    Int?     @map("category_id")
+  name          String
+  captainUserId Int      @map("captain_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  tournament    Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  category      TournamentCategory? @relation(fields: [categoryId], references: [id])
+  captain       User                @relation("TeamCaptain", fields: [captainUserId], references: [id])
+  members       TeamMember[]
+  registrations Registration[]
+  matchesAsTeamA Match[]            @relation("MatchTeamA")
+  matchesAsTeamB Match[]            @relation("MatchTeamB")
+
+  @@map("teams")
+}
+
+// 9. Team Members
+model TeamMember {
+  id       Int       @id @default(autoincrement())
+  teamId   Int       @map("team_id")
+  userId   Int       @map("user_id")
+  status   String    // invited | accepted
+  joinedAt DateTime? @map("joined_at")
+
+  // Relations
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+// 10. Registrations
+model Registration {
+  id           Int      @id @default(autoincrement())
+  tournamentId Int      @map("tournament_id")
+  categoryId   Int?     @map("category_id")
+  userId       Int      @map("user_id")
+  teamId       Int?     @map("team_id")
+  paid         Boolean  @default(false)
+  paymentInfo  Json?    @map("payment_info")
+  status       String   // registered | cancelled
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Relations
+  tournament Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  category   TournamentCategory? @relation(fields: [categoryId], references: [id])
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team       Team?               @relation(fields: [teamId], references: [id])
+
+  @@map("registrations")
+}
+
+// 11. Player Profiles
+model PlayerProfile {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  gameId    Int      @map("game_id")
+  rating    Float?
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game        Game         @relation(fields: [gameId], references: [id])
+  playerStats PlayerStat[]
+
+  @@unique([userId, gameId])
+  @@map("player_profiles")
+}
+
+// 12. Matches
+model Match {
+  id               Int       @id @default(autoincrement())
+  tournamentId     Int       @map("tournament_id")
+  categoryId       Int?      @map("category_id")
+  gameId           Int       @map("game_id")
+  round            String?
+  bracketPos       String?   @map("bracket_pos")
+  teamAId          Int?      @map("team_a_id")
+  teamBId          Int?      @map("team_b_id")
+  scheduledStart   DateTime? @map("scheduled_start")
+  scheduledEnd     DateTime? @map("scheduled_end")
+  courtNo          String?   @map("court_no")
+  status           String    // scheduled | live | finished
+  scoreA           Int?      @map("score_a")
+  scoreB           Int?      @map("score_b")
+  bestOf           Int?      @map("best_of")
+  scoringMode      String?   @map("scoring_mode")
+  meta             Json?
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  tournament   Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  category     TournamentCategory? @relation(fields: [categoryId], references: [id])
+  game         Game                @relation(fields: [gameId], references: [id])
+  teamA        Team?               @relation("MatchTeamA", fields: [teamAId], references: [id])
+  teamB        Team?               @relation("MatchTeamB", fields: [teamBId], references: [id])
+  matchEvents  MatchEvent[]
+
+  @@map("matches")
+}
+
+// 13. Match Events
+model MatchEvent {
+  id        Int      @id @default(autoincrement())
+  matchId   Int      @map("match_id")
+  eventType String   @map("event_type") // point | start | end | timeout | penalty | undo
+  payload   Json?
+  createdBy Int      @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  match   Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  creator User  @relation(fields: [createdBy], references: [id])
+
+  @@map("match_events")
+}
+
+// 14. Player Stats
+model PlayerStat {
+  id              Int      @id @default(autoincrement())
+  playerProfileId Int      @map("player_profile_id")
+  tournamentId    Int?     @map("tournament_id")
+  categoryId      Int?     @map("category_id")
+  stats           Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  playerProfile PlayerProfile       @relation(fields: [playerProfileId], references: [id], onDelete: Cascade)
+  tournament    Tournament?         @relation(fields: [tournamentId], references: [id])
+  category      TournamentCategory? @relation(fields: [categoryId], references: [id])
+
+  @@map("player_stats")
+}
+
+// 15. Notifications
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  type      String
+  payload   Json?
+  delivered Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }
