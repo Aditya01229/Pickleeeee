@@ -20,15 +20,15 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  // Relations
-  orgMemberships    OrgMembership[]
-  captainedTeams    Team[]             @relation("TeamCaptain")
-  teamMemberships   TeamMember[]
-  registrations     Registration[]
-  playerProfiles    PlayerProfile[]
-  createdTournaments Tournament[]      @relation("TournamentCreator")
-  notifications     Notification[]
-  matchEvents       MatchEvent[]
+  // Relations - M2M with Organization, M2M with Game, M2M with Team
+  orgMemberships     OrgMembership[]
+  captainedTeams     Team[]             @relation("TeamCaptain")
+  teamMemberships    TeamMember[]
+  registrations      Registration[]
+  playerProfiles     PlayerProfile[]
+  createdTournaments Tournament[]       @relation("TournamentCreator")
+  notifications      Notification[]
+  matchEvents        MatchEvent[]
 
   @@map("users")
 }
@@ -43,8 +43,8 @@ model Organization {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  // Relations
-  defaultGame    Game?          @relation("OrgDefaultGame", fields: [defaultGameId], references: [id])
+  // Relations - M2M with User, M2M with Games, 1-M with Tournament
+  defaultGame    Game?           @relation("OrgDefaultGame", fields: [defaultGameId], references: [id])
   memberships    OrgMembership[]
   orgGames       OrgGame[]
   tournaments    Tournament[]
@@ -76,7 +76,7 @@ model Game {
   defaultSettings Json?    @map("default_settings")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  // Relations
+  // Relations - M2M with Org, M2M with User, 1-M with Tournament, 1-1 with Match
   orgGames          OrgGame[]
   tournaments       Tournament[]
   matches           Match[]
@@ -123,15 +123,15 @@ model Tournament {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  // Relations
-  organization Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  game         Game                 @relation(fields: [gameId], references: [id])
-  creator      User                 @relation("TournamentCreator", fields: [createdBy], references: [id])
-  categories   TournamentCategory[]
-  teams        Team[]
+  // Relations - M-1 with Org, M-1 with Game, 1-M with Category, M-1 with PlayerProfile
+  organization  Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  game          Game                 @relation(fields: [gameId], references: [id])
+  creator       User                 @relation("TournamentCreator", fields: [createdBy], references: [id])
+  categories    TournamentCategory[]
+  teams         Team[]
   registrations Registration[]
-  matches      Match[]
-  playerStats  PlayerStat[]
+  matches       Match[]
+  playerStats   PlayerStat[]
 
   @@unique([orgId, slug])
   @@map("tournaments")
@@ -157,7 +157,7 @@ model TournamentCategory {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  // Relations
+  // Relations - M-1 with Tournament, 1-1 with Team
   tournament    Tournament     @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   teams         Team[]
   registrations Registration[]
@@ -177,14 +177,14 @@ model Team {
   captainUserId Int      @map("captain_user_id")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  // Relations
-  tournament    Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  category      TournamentCategory? @relation(fields: [categoryId], references: [id])
-  captain       User                @relation("TeamCaptain", fields: [captainUserId], references: [id])
-  members       TeamMember[]
-  registrations Registration[]
-  matchesAsTeamA Match[]            @relation("MatchTeamA")
-  matchesAsTeamB Match[]            @relation("MatchTeamB")
+  // Relations - 1-1 with Category, M-1 with Captain, M2M with User
+  tournament     Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  category       TournamentCategory? @relation(fields: [categoryId], references: [id])
+  captain        User                @relation("TeamCaptain", fields: [captainUserId], references: [id])
+  members        TeamMember[]
+  registrations  Registration[]
+  matchesAsTeamA Match[]             @relation("MatchTeamA")
+  matchesAsTeamB Match[]             @relation("MatchTeamB")
 
   @@map("teams")
 }
@@ -202,6 +202,7 @@ model TeamMember {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@index([status])
   @@map("team_members")
 }
 
@@ -223,6 +224,8 @@ model Registration {
   user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   team       Team?               @relation(fields: [teamId], references: [id])
 
+  @@unique([tournamentId, categoryId, userId, teamId])
+  @@index([status])
   @@map("registrations")
 }
 
@@ -235,7 +238,7 @@ model PlayerProfile {
   meta      Json?
   createdAt DateTime @default(now()) @map("created_at")
 
-  // Relations
+  // Relations - M2M with User/Game, 1-M with Tournament
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   game        Game         @relation(fields: [gameId], references: [id])
   playerStats PlayerStat[]
@@ -265,7 +268,7 @@ model Match {
   meta             Json?
   createdAt        DateTime  @default(now()) @map("created_at")
 
-  // Relations
+  // Relations - M-1 with Category, M-1 with Game
   tournament   Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   category     TournamentCategory? @relation(fields: [categoryId], references: [id])
   game         Game                @relation(fields: [gameId], references: [id])
@@ -273,6 +276,8 @@ model Match {
   teamB        Team?               @relation("MatchTeamB", fields: [teamBId], references: [id])
   matchEvents  MatchEvent[]
 
+  @@index([status])
+  @@index([tournamentId, categoryId])
   @@map("matches")
 }
 
