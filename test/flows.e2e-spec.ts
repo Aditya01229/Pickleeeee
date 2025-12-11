@@ -167,9 +167,10 @@ describe('Complete User Flows (e2e)', () => {
     let teamId: number;
     let teamMember: TestUser;
 
+    // Increase timeout for this complex flow
+    jest.setTimeout(60000);
+
     it('should complete team creation and invitation flow', async () => {
-      // Increase timeout for this complex flow
-      jest.setTimeout(60000);
       
       // Setup: Create manager and organization for this flow
       const flow3Timestamp = Date.now();
@@ -318,6 +319,355 @@ describe('Complete User Flows (e2e)', () => {
         .expect(200);
 
       expect(teamsResponse.body.captainedTeams.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Flow 4: Tournament Registration Flow', () => {
+    let tournamentId: number;
+    let categoryId: number;
+    let registeredPlayer: TestUser;
+
+    jest.setTimeout(60000);
+
+    it('should complete tournament registration flow', async () => {
+      const flow4Timestamp = Date.now();
+      
+      // Setup: Create manager, organization, and tournament
+      const managerFlow4 = await testUtils.createUserWithToken({
+        name: 'Flow4 Manager',
+        email: `flow4manager${flow4Timestamp}@test.com`,
+        password: 'password123',
+      });
+
+      const orgResponse = await request(app.getHttpServer())
+        .post('/users/organizations')
+        .set('Authorization', `Bearer ${managerFlow4.token}`)
+        .send({
+          name: 'Flow4 Organization',
+          slug: `flow4-org-${flow4Timestamp}`,
+          defaultGameId: game.id,
+        })
+        .expect(201);
+
+      const flow4Org = {
+        id: orgResponse.body.id,
+        name: orgResponse.body.name,
+        slug: orgResponse.body.slug,
+      };
+
+      // Create tournament
+      const tournamentResponse = await request(app.getHttpServer())
+        .post(`/organizations/${flow4Org.id}/tournaments`)
+        .set('Authorization', `Bearer ${managerFlow4.token}`)
+        .send({
+          gameId: game.id,
+          name: 'Flow4 Tournament',
+          slug: `flow4-tournament-${flow4Timestamp}`,
+          startDate: new Date('2025-12-25').toISOString(),
+          endDate: new Date('2025-12-26').toISOString(),
+        })
+        .expect(201);
+
+      tournamentId = tournamentResponse.body.id;
+
+      // Create category
+      const categoryResponse = await request(app.getHttpServer())
+        .post(
+          `/organizations/${flow4Org.id}/tournaments/${tournamentId}/categories`,
+        )
+        .set('Authorization', `Bearer ${managerFlow4.token}`)
+        .send({
+          name: "Women's Singles",
+          key: 'women-singles',
+          entryType: 'INDIVIDUAL',
+          entryLimit: 16,
+        })
+        .expect(201);
+
+      categoryId = categoryResponse.body.id;
+
+      // 1. Create player profile for the game
+      registeredPlayer = await testUtils.createUserWithToken({
+        name: 'Flow4 Player',
+        email: `flow4player${flow4Timestamp}@test.com`,
+        password: 'password123',
+      });
+
+      const profileResponse = await request(app.getHttpServer())
+        .post('/users/player-profiles')
+        .set('Authorization', `Bearer ${registeredPlayer.token}`)
+        .send({
+          gameId: game.id,
+          rating: 1200,
+          meta: {
+            skillLevel: 'intermediate',
+          },
+        })
+        .expect(201);
+
+      expect(profileResponse.body.rating).toBe(1200);
+
+      // 2. Register for tournament
+      const registrationResponse = await request(app.getHttpServer())
+        .post('/users/registrations')
+        .set('Authorization', `Bearer ${registeredPlayer.token}`)
+        .send({
+          tournamentId: tournamentId,
+          categoryId: categoryId,
+        })
+        .expect(201);
+
+      expect(registrationResponse.body.tournamentId).toBe(tournamentId);
+      expect(registrationResponse.body.categoryId).toBe(categoryId);
+
+      // 3. Get player registrations
+      const registrationsResponse = await request(app.getHttpServer())
+        .get('/users/registrations')
+        .set('Authorization', `Bearer ${registeredPlayer.token}`)
+        .expect(200);
+
+      expect(Array.isArray(registrationsResponse.body)).toBe(true);
+      expect(registrationsResponse.body.length).toBeGreaterThan(0);
+
+      // 4. Get tournament history
+      const historyResponse = await request(app.getHttpServer())
+        .get('/users/tournaments/history')
+        .set('Authorization', `Bearer ${registeredPlayer.token}`)
+        .expect(200);
+
+      expect(Array.isArray(historyResponse.body)).toBe(true);
+    });
+  });
+
+  describe('Flow 5: Player Profile Management Flow', () => {
+    let profilePlayer: TestUser;
+
+    it('should complete player profile management flow', async () => {
+      const flow5Timestamp = Date.now();
+
+      // 1. Register and login player
+      profilePlayer = await testUtils.createUserWithToken({
+        name: 'Flow5 Player',
+        email: `flow5player${flow5Timestamp}@test.com`,
+        password: 'password123',
+      });
+
+      // 2. Create player profile
+      const createProfileResponse = await request(app.getHttpServer())
+        .post('/users/player-profiles')
+        .set('Authorization', `Bearer ${profilePlayer.token}`)
+        .send({
+          gameId: game.id,
+          rating: 1000,
+          meta: {
+            skillLevel: 'beginner',
+            preferredPosition: 'backhand',
+          },
+        })
+        .expect(201);
+
+      expect(createProfileResponse.body.rating).toBe(1000);
+      expect(createProfileResponse.body.meta.skillLevel).toBe('beginner');
+
+      // 3. Get all player profiles
+      const profilesResponse = await request(app.getHttpServer())
+        .get('/users/player-profiles')
+        .set('Authorization', `Bearer ${profilePlayer.token}`)
+        .expect(200);
+
+      expect(Array.isArray(profilesResponse.body)).toBe(true);
+      expect(profilesResponse.body.length).toBeGreaterThan(0);
+
+      // 4. Update player profile
+      const updateProfileResponse = await request(app.getHttpServer())
+        .put(`/users/player-profiles/${game.id}`)
+        .set('Authorization', `Bearer ${profilePlayer.token}`)
+        .send({
+          rating: 1300,
+          meta: {
+            skillLevel: 'advanced',
+            preferredPosition: 'forehand',
+          },
+        })
+        .expect(200);
+
+      expect(updateProfileResponse.body.rating).toBe(1300);
+      expect(updateProfileResponse.body.meta.skillLevel).toBe('advanced');
+    });
+  });
+
+  describe('Flow 6: Match and Stats Flow', () => {
+    let matchPlayer: TestUser;
+    let matchOrg: TestOrganization;
+    let matchTournamentId: number;
+
+    jest.setTimeout(60000);
+
+    it('should complete match and stats flow', async () => {
+      const flow6Timestamp = Date.now();
+
+      // Setup: Create manager, organization, tournament
+      const managerFlow6 = await testUtils.createUserWithToken({
+        name: 'Flow6 Manager',
+        email: `flow6manager${flow6Timestamp}@test.com`,
+        password: 'password123',
+      });
+
+      const orgResponse = await request(app.getHttpServer())
+        .post('/users/organizations')
+        .set('Authorization', `Bearer ${managerFlow6.token}`)
+        .send({
+          name: 'Flow6 Organization',
+          slug: `flow6-org-${flow6Timestamp}`,
+          defaultGameId: game.id,
+        })
+        .expect(201);
+
+      matchOrg = {
+        id: orgResponse.body.id,
+        name: orgResponse.body.name,
+        slug: orgResponse.body.slug,
+      };
+
+      const tournamentResponse = await request(app.getHttpServer())
+        .post(`/organizations/${matchOrg.id}/tournaments`)
+        .set('Authorization', `Bearer ${managerFlow6.token}`)
+        .send({
+          gameId: game.id,
+          name: 'Flow6 Tournament',
+          slug: `flow6-tournament-${flow6Timestamp}`,
+        })
+        .expect(201);
+
+      matchTournamentId = tournamentResponse.body.id;
+
+      // 1. Create player and profile
+      matchPlayer = await testUtils.createUserWithToken({
+        name: 'Flow6 Player',
+        email: `flow6player${flow6Timestamp}@test.com`,
+        password: 'password123',
+      });
+
+      await request(app.getHttpServer())
+        .post('/users/player-profiles')
+        .set('Authorization', `Bearer ${matchPlayer.token}`)
+        .send({
+          gameId: game.id,
+          rating: 1200,
+        })
+        .expect(201);
+
+      // 2. Register for tournament
+      const categoryResponse = await request(app.getHttpServer())
+        .post(
+          `/organizations/${matchOrg.id}/tournaments/${matchTournamentId}/categories`,
+        )
+        .set('Authorization', `Bearer ${managerFlow6.token}`)
+        .send({
+          name: "Men's Singles",
+          key: 'men-singles',
+          entryType: 'INDIVIDUAL',
+          entryLimit: 16,
+        })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post('/users/registrations')
+        .set('Authorization', `Bearer ${matchPlayer.token}`)
+        .send({
+          tournamentId: matchTournamentId,
+          categoryId: categoryResponse.body.id,
+        })
+        .expect(201);
+
+      // 3. Get matches (should be empty initially)
+      const matchesResponse = await request(app.getHttpServer())
+        .get('/users/matches')
+        .set('Authorization', `Bearer ${matchPlayer.token}`)
+        .expect(200);
+
+      expect(Array.isArray(matchesResponse.body)).toBe(true);
+
+      // 4. Get player stats
+      const statsResponse = await request(app.getHttpServer())
+        .get('/users/stats')
+        .set('Authorization', `Bearer ${matchPlayer.token}`)
+        .expect(200);
+
+      expect(statsResponse.body).toHaveProperty('totalMatches');
+      expect(statsResponse.body).toHaveProperty('wins');
+      expect(statsResponse.body).toHaveProperty('losses');
+      expect(statsResponse.body).toHaveProperty('playerProfiles');
+      expect(Array.isArray(statsResponse.body.playerProfiles)).toBe(true);
+      if (statsResponse.body.playerProfiles.length > 0) {
+        expect(statsResponse.body.playerProfiles[0].gameId).toBe(game.id);
+      }
+    });
+  });
+
+  describe('Flow 7: Notification Flow', () => {
+    let notificationPlayer: TestUser;
+    let notificationOrg: TestOrganization;
+
+    it('should complete notification flow', async () => {
+      const flow7Timestamp = Date.now();
+
+      // Setup: Create manager and organization
+      const managerFlow7 = await testUtils.createUserWithToken({
+        name: 'Flow7 Manager',
+        email: `flow7manager${flow7Timestamp}@test.com`,
+        password: 'password123',
+      });
+
+      const orgResponse = await request(app.getHttpServer())
+        .post('/users/organizations')
+        .set('Authorization', `Bearer ${managerFlow7.token}`)
+        .send({
+          name: 'Flow7 Organization',
+          slug: `flow7-org-${flow7Timestamp}`,
+          defaultGameId: game.id,
+        })
+        .expect(201);
+
+      notificationOrg = {
+        id: orgResponse.body.id,
+        name: orgResponse.body.name,
+        slug: orgResponse.body.slug,
+      };
+
+      // 1. Create player
+      notificationPlayer = await testUtils.createUserWithToken({
+        name: 'Flow7 Player',
+        email: `flow7player${flow7Timestamp}@test.com`,
+        password: 'password123',
+      });
+
+      // 2. Join organization (should create notification)
+      await request(app.getHttpServer())
+        .post('/users/organizations/join')
+        .set('Authorization', `Bearer ${notificationPlayer.token}`)
+        .send({
+          organizationId: notificationOrg.id,
+          role: 'follower',
+        })
+        .expect(201);
+
+      // 3. Get notifications
+      const notificationsResponse = await request(app.getHttpServer())
+        .get('/users/notifications')
+        .set('Authorization', `Bearer ${notificationPlayer.token}`)
+        .expect(200);
+
+      expect(Array.isArray(notificationsResponse.body)).toBe(true);
+
+      // 4. Mark notification as read (if any exist)
+      if (notificationsResponse.body.length > 0) {
+        const notificationId = notificationsResponse.body[0].id;
+        await request(app.getHttpServer())
+          .put(`/users/notifications/${notificationId}/read`)
+          .set('Authorization', `Bearer ${notificationPlayer.token}`)
+          .expect(200);
+      }
     });
   });
 });

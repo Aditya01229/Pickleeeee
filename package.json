@@ -21,7 +21,10 @@
     "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch",
     "test:flows": "jest --config ./test/jest-e2e.json --testPathPattern=flows",
     "test:api": "jest --config ./test/jest-e2e.json --testPathPattern=api-endpoints",
-    "test:auth": "jest --config ./test/jest-e2e.json --testPathPattern=auth"
+    "test:auth": "jest --config ./test/jest-e2e.json --testPathPattern=auth",
+    "test:tournament-api": "jest --config ./test/jest-e2e.json --testPathPattern=tournament-api",
+    "test:registration-api": "jest --config ./test/jest-e2e.json --testPathPattern=registration-api",
+    "test:match-stats-api": "jest --config ./test/jest-e2e.json --testPathPattern=match-stats-api"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -31,6 +34,8 @@
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/client": "^6.19.0",
     "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.3",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",

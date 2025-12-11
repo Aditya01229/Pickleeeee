@@ -1,64 +1,215 @@
+import { IsEnum, IsString, IsNumber, IsOptional, IsDateString, IsObject } from 'class-validator';
+
+export enum EntryType {
+  INDIVIDUAL = 'INDIVIDUAL',
+  TEAM = 'TEAM',
+}
+
 export class CreateTournamentDto {
   // orgId removed - now comes from URL param
+  @IsNumber()
   gameId: number;
+
+  @IsString()
   name: string;
+
+  @IsString()
   slug: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
-  regDeadline?: Date;
-  startDate?: Date;
-  endDate?: Date;
+
+  @IsOptional()
+  @IsDateString()
+  regDeadline?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsNumber()
   courtsCount?: number;
+
+  @IsOptional()
+  @IsNumber()
   matchDurationMinutes?: number;
+
+  @IsOptional()
+  @IsNumber()
   bufferMinutes?: number;
+
+  @IsOptional()
+  @IsString()
   scoringMode?: string;
+
+  @IsOptional()
+  @IsObject()
   settings?: any;
 }
 
 export class AddCategoryDto {
   // tournamentId removed - now comes from URL param
+  @IsString()
   name: string;
+
+  @IsString()
   key: string;
-  entryType: 'INDIVIDUAL' | 'TEAM';
+
+  @IsEnum(EntryType, {
+    message: 'entryType must be either INDIVIDUAL or TEAM',
+  })
+  entryType: EntryType;
+
+  @IsOptional()
+  @IsNumber()
   entryLimit?: number;
+
+  @IsOptional()
+  @IsNumber()
   teamSize?: number; // Required for TEAM entryType, number of players per team
-  regDeadline?: Date;
-  startDate?: Date;
-  endDate?: Date;
+
+  @IsOptional()
+  @IsDateString()
+  regDeadline?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsNumber()
   courtsCount?: number;
+
+  @IsOptional()
+  @IsNumber()
   matchDurationMinutes?: number;
+
+  @IsOptional()
+  @IsNumber()
   bufferMinutes?: number;
+
+  @IsOptional()
+  @IsString()
   scoringMode?: string;
+
+  @IsOptional()
+  @IsObject()
   settings?: any;
 }
 
 export class UpdateTournamentDto {
+  @IsOptional()
+  @IsNumber()
   gameId?: number;
+
+  @IsOptional()
+  @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsString()
   slug?: string;
+
+  @IsOptional()
+  @IsString()
   description?: string;
-  regDeadline?: Date;
-  startDate?: Date;
-  endDate?: Date;
+
+  @IsOptional()
+  @IsDateString()
+  regDeadline?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsNumber()
   courtsCount?: number;
+
+  @IsOptional()
+  @IsNumber()
   matchDurationMinutes?: number;
+
+  @IsOptional()
+  @IsNumber()
   bufferMinutes?: number;
+
+  @IsOptional()
+  @IsString()
   scoringMode?: string;
+
+  @IsOptional()
+  @IsObject()
   settings?: any;
 }
 
 export class UpdateCategoryDto {
+  @IsOptional()
+  @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsString()
   key?: string;
-  entryType?: 'INDIVIDUAL' | 'TEAM';
+
+  @IsOptional()
+  @IsEnum(EntryType, {
+    message: 'entryType must be either INDIVIDUAL or TEAM',
+  })
+  entryType?: EntryType;
+
+  @IsOptional()
+  @IsNumber()
   entryLimit?: number;
+
+  @IsOptional()
+  @IsNumber()
   teamSize?: number; // Required for TEAM entryType, number of players per team
-  regDeadline?: Date;
-  startDate?: Date;
-  endDate?: Date;
+
+  @IsOptional()
+  @IsDateString()
+  regDeadline?: string;
+
+  @IsOptional()
+  @IsDateString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  endDate?: string;
+
+  @IsOptional()
+  @IsNumber()
   courtsCount?: number;
+
+  @IsOptional()
+  @IsNumber()
   matchDurationMinutes?: number;
+
+  @IsOptional()
+  @IsNumber()
   bufferMinutes?: number;
+
+  @IsOptional()
+  @IsString()
   scoringMode?: string;
+
+  @IsOptional()
+  @IsObject()
   settings?: any;
 }
 

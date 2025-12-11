@@ -13,7 +13,8 @@ import {
 } from './dto/organization.dto';
 import {
   RegisterTournamentDto,
-  PayRegistrationDto
+  PayRegistrationDto,
+  EntryType
 } from './dto/tournament.dto';
 import {
   CreateTeamDto,
@@ -285,7 +286,7 @@ export class UserService {
     }
 
     // INDIVIDUAL registration
-    if (category.entryType === 'INDIVIDUAL') {
+    if (category.entryType === EntryType.INDIVIDUAL) {
       const registration = await this.prisma.registration.create({
         data: {
           tournamentId: registerDto.tournamentId,
@@ -315,7 +316,7 @@ export class UserService {
     }
 
     // TEAM registration
-    if (category.entryType === 'TEAM') {
+    if (category.entryType === EntryType.TEAM) {
       if (!registerDto.teamId) {
         throw new BadRequestException('Team ID required for team categories');
       }
@@ -547,7 +548,7 @@ export class UserService {
       throw new NotFoundException('Category not found');
     }
 
-    if (category.entryType !== 'TEAM') {
+    if (category.entryType !== EntryType.TEAM) {
       throw new BadRequestException('This category does not require teams');
     }
 

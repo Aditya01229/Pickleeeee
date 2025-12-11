@@ -5,7 +5,8 @@ import {
   CreateTournamentDto, 
   AddCategoryDto, 
   UpdateTournamentDto, 
-  UpdateCategoryDto 
+  UpdateCategoryDto,
+  EntryType
 } from '../user/dto/tournament.dto';
 
 @Injectable()
@@ -105,7 +106,7 @@ export class OrganizationService {
     }
 
     // Validate teamSize for TEAM entryType
-    if (addCategoryDto.entryType === 'TEAM' && !addCategoryDto.teamSize) {
+    if (addCategoryDto.entryType === EntryType.TEAM && !addCategoryDto.teamSize) {
       throw new BadRequestException('teamSize is required for TEAM entryType');
     }
 
@@ -284,7 +285,7 @@ export class OrganizationService {
     // Validate teamSize for TEAM entryType
     const entryType = updateCategoryDto.entryType || category.entryType;
     const currentSettings = (category.settings as any) || {};
-    if (entryType === 'TEAM' && updateCategoryDto.teamSize === undefined && !currentSettings.teamSize) {
+    if (entryType === EntryType.TEAM && updateCategoryDto.teamSize === undefined && !currentSettings.teamSize) {
       throw new BadRequestException('teamSize is required for TEAM entryType');
     }
 

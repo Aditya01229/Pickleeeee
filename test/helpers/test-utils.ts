@@ -40,8 +40,18 @@ export class TestUtils {
 
     this.app = this.moduleFixture.createNestApplication();
     
-    // Enable CORS and validation like in production
-    // Note: You can add ValidationPipe here if you add class-validator to DTOs
+    // Enable validation like in production
+    const { ValidationPipe } = await import('@nestjs/common');
+    this.app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: false, // Less strict for testing
+        transform: true,
+        transformOptions: {
+          enableImplicitConversion: true,
+        },
+      }),
+    );
     
     await this.app.init();
 
