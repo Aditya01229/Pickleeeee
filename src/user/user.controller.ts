@@ -7,9 +7,14 @@ import {
   Body, 
   Param, 
   Query,
-  ParseIntPipe 
+  ParseIntPipe,
+  UseGuards 
 } from '@nestjs/common';
 import { UserService } from './user.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { CurrentUser } from '../auth/user.decorator';
 import { 
   CreateUserDto, 
   LoginDto, 
@@ -20,15 +25,16 @@ import {
   CreateOrganizationDto
 } from './dto/organization.dto';
 import {
-  CreateTournamentDto,
-  AddCategoryDto,
-  RegisterTournamentDto
+  RegisterTournamentDto,
+  PayRegistrationDto
 } from './dto/tournament.dto';
 import {
   CreateTeamDto,
   InviteTeamMemberDto,
   RespondToTeamInviteDto,
-  UpdateTeamDto
+  UpdateTeamDto,
+  RemoveTeamMemberDto,
+  LeaveTeamDto
 } from './dto/team.dto';
 import {
   CreatePlayerProfileDto,
@@ -63,23 +69,25 @@ export class UserController {
 
   /**
    * Get current user profile
-   * GET /users/:userId/profile
+   * GET /users/profile
    */
-  @Get(':userId/profile')
-  getProfile(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getProfile(userId);
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  getProfile(@CurrentUser() user: any) {
+    return this.userService.getProfile(user.userId);
   }
 
   /**
    * Update current user profile
-   * PUT /users/:userId/profile
+   * PUT /users/profile
    */
-  @Put(':userId/profile')
+  @Put('profile')
+  @UseGuards(JwtAuthGuard)
   updateProfile(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() updateProfileDto: UpdateProfileDto
   ) {
-    return this.userService.updateProfile(userId, updateProfileDto);
+    return this.userService.updateProfile(user.userId, updateProfileDto);
   }
 
   // ==========================================
@@ -87,107 +95,89 @@ export class UserController {
   // ==========================================
 
   /**
-   * Create new organization (user becomes manager)
-   * POST /users/:userId/organizations
+   * Create new organization (user becomes super_manager)
+   * POST /users/organizations
    */
-  @Post(':userId/organizations')
+  @Post('organizations')
+  @UseGuards(JwtAuthGuard)
   createOrganization(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() createOrgDto: CreateOrganizationDto
   ) {
-    return this.userService.createOrganization(userId, createOrgDto);
+    return this.userService.createOrganization(user.userId, createOrgDto);
   }
 
   /**
    * Join an existing organization
-   * POST /users/:userId/organizations/join
+   * POST /users/organizations/join
    */
-  @Post(':userId/organizations/join')
+  @Post('organizations/join')
+  @UseGuards(JwtAuthGuard)
   joinOrganization(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() joinOrgDto: JoinOrganizationDto
   ) {
-    return this.userService.joinOrganization(userId, joinOrgDto);
+    return this.userService.joinOrganization(user.userId, joinOrgDto);
   }
 
   /**
    * Get all organizations user belongs to
-   * GET /users/:userId/organizations
+   * GET /users/organizations
    */
-  @Get(':userId/organizations')
-  getUserOrganizations(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getUserOrganizations(userId);
+  @Get('organizations')
+  @UseGuards(JwtAuthGuard)
+  getUserOrganizations(@CurrentUser() user: any) {
+    return this.userService.getUserOrganizations(user.userId);
   }
 
   // ==========================================
-  // 3. TOURNAMENT MANAGEMENT (MANAGER)
-  // ==========================================
-
-  /**
-   * Create a new tournament (manager only)
-   * POST /users/:userId/tournaments
-   */
-  @Post(':userId/tournaments')
-  createTournament(
-    @Param('userId', ParseIntPipe) userId: number,
-    @Body() createTournamentDto: CreateTournamentDto
-  ) {
-    return this.userService.createTournament(userId, createTournamentDto);
-  }
-
-  /**
-   * Add category to tournament (manager only)
-   * POST /users/:userId/tournaments/categories
-   */
-  @Post(':userId/tournaments/categories')
-  addTournamentCategory(
-    @Param('userId', ParseIntPipe) userId: number,
-    @Body() addCategoryDto: AddCategoryDto
-  ) {
-    return this.userService.addTournamentCategory(userId, addCategoryDto);
-  }
-
-  /**
-   * Get all tournaments hosted by user (manager)
-   * GET /users/:userId/tournaments/hosted
-   */
-  @Get(':userId/tournaments/hosted')
-  getHostedTournaments(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getHostedTournaments(userId);
-  }
-
-  // ==========================================
-  // 4. TOURNAMENT REGISTRATION (PLAYER)
+  // 3. TOURNAMENT REGISTRATION (PLAYER)
   // ==========================================
 
   /**
    * Register for a tournament (individual or team)
-   * POST /users/:userId/registrations
+   * POST /users/registrations
    */
-  @Post(':userId/registrations')
+  @Post('registrations')
+  @UseGuards(JwtAuthGuard)
   registerForTournament(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() registerDto: RegisterTournamentDto
   ) {
-    return this.userService.registerForTournament(userId, registerDto);
+    return this.userService.registerForTournament(user.userId, registerDto);
   }
 
   /**
    * Get all user's tournament registrations
-   * GET /users/:userId/registrations
+   * GET /users/registrations
    */
-  @Get(':userId/registrations')
-  getMyRegistrations(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getMyRegistrations(userId);
+  @Get('registrations')
+  @UseGuards(JwtAuthGuard)
+  getMyRegistrations(@CurrentUser() user: any) {
+    return this.userService.getMyRegistrations(user.userId);
+  }
+
+  /**
+   * Pay registration fees (captain for teams, user for individual)
+   * POST /users/registrations/pay
+   */
+  @Post('registrations/pay')
+  @UseGuards(JwtAuthGuard)
+  payRegistration(
+    @CurrentUser() user: any,
+    @Body() payDto: PayRegistrationDto
+  ) {
+    return this.userService.payRegistration(user.userId, payDto);
   }
 
   /**
    * Get tournament participation history
-   * GET /users/:userId/tournaments/history
+   * GET /users/tournaments/history
    */
-  @Get(':userId/tournaments/history')
-  getTournamentHistory(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getTournamentHistory(userId);
+  @Get('tournaments/history')
+  @UseGuards(JwtAuthGuard)
+  getTournamentHistory(@CurrentUser() user: any) {
+    return this.userService.getTournamentHistory(user.userId);
   }
 
   // ==========================================
@@ -196,56 +186,87 @@ export class UserController {
 
   /**
    * Create a new team (user becomes captain)
-   * POST /users/:userId/teams
+   * POST /users/teams
    */
-  @Post(':userId/teams')
+  @Post('teams')
+  @UseGuards(JwtAuthGuard)
   createTeam(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() createTeamDto: CreateTeamDto
   ) {
-    return this.userService.createTeam(userId, createTeamDto);
+    return this.userService.createTeam(user.userId, createTeamDto);
   }
 
   /**
    * Invite member to team (captain only)
-   * POST /users/:userId/teams/invite
+   * POST /users/teams/invite
    */
-  @Post(':userId/teams/invite')
+  @Post('teams/invite')
+  @UseGuards(JwtAuthGuard)
   inviteTeamMember(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() inviteDto: InviteTeamMemberDto
   ) {
-    return this.userService.inviteTeamMember(userId, inviteDto);
+    return this.userService.inviteTeamMember(user.userId, inviteDto);
   }
 
   /**
    * Respond to team invitation (accept/reject)
-   * POST /users/:userId/teams/respond
+   * POST /users/teams/respond
    */
-  @Post(':userId/teams/respond')
+  @Post('teams/respond')
+  @UseGuards(JwtAuthGuard)
   respondToTeamInvite(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() respondDto: RespondToTeamInviteDto
   ) {
-    return this.userService.respondToTeamInvite(userId, respondDto);
+    return this.userService.respondToTeamInvite(user.userId, respondDto);
+  }
+
+  /**
+   * Remove team member (captain only)
+   * POST /users/teams/remove
+   */
+  @Post('teams/remove')
+  @UseGuards(JwtAuthGuard)
+  removeTeamMember(
+    @CurrentUser() user: any,
+    @Body() removeDto: RemoveTeamMemberDto
+  ) {
+    return this.userService.removeTeamMember(user.userId, removeDto);
+  }
+
+  /**
+   * Leave a team (member can leave on their own)
+   * POST /users/teams/leave
+   */
+  @Post('teams/leave')
+  @UseGuards(JwtAuthGuard)
+  leaveTeam(
+    @CurrentUser() user: any,
+    @Body() leaveDto: LeaveTeamDto
+  ) {
+    return this.userService.leaveTeam(user.userId, leaveDto);
   }
 
   /**
    * Get all teams user is part of (captain or member)
-   * GET /users/:userId/teams
+   * GET /users/teams
    */
-  @Get(':userId/teams')
-  getMyTeams(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getMyTeams(userId);
+  @Get('teams')
+  @UseGuards(JwtAuthGuard)
+  getMyTeams(@CurrentUser() user: any) {
+    return this.userService.getMyTeams(user.userId);
   }
 
   /**
    * Get pending team invitations
-   * GET /users/:userId/teams/invites
+   * GET /users/teams/invites
    */
-  @Get(':userId/teams/invites')
-  getTeamInvites(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getTeamInvites(userId);
+  @Get('teams/invites')
+  @UseGuards(JwtAuthGuard)
+  getTeamInvites(@CurrentUser() user: any) {
+    return this.userService.getTeamInvites(user.userId);
   }
 
   // ==========================================
@@ -254,28 +275,30 @@ export class UserController {
 
   /**
    * Get all matches user played in
-   * GET /users/:userId/matches?limit=50
+   * GET /users/matches?limit=50
    */
-  @Get(':userId/matches')
+  @Get('matches')
+  @UseGuards(JwtAuthGuard)
   getMyMatches(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Query('limit') limit?: string
   ) {
     const limitNum = limit ? parseInt(limit) : 50;
-    return this.userService.getMyMatches(userId, limitNum);
+    return this.userService.getMyMatches(user.userId, limitNum);
   }
 
   /**
    * Get user's overall stats
-   * GET /users/:userId/stats?tournamentId=100
+   * GET /users/stats?tournamentId=100
    */
-  @Get(':userId/stats')
+  @Get('stats')
+  @UseGuards(JwtAuthGuard)
   getMyStats(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Query('tournamentId') tournamentId?: string
   ) {
     const tournamentIdNum = tournamentId ? parseInt(tournamentId) : undefined;
-    return this.userService.getMyStats(userId, tournamentIdNum);
+    return this.userService.getMyStats(user.userId, tournamentIdNum);
   }
 
   // ==========================================
@@ -284,23 +307,25 @@ export class UserController {
 
   /**
    * Get all user notifications
-   * GET /users/:userId/notifications
+   * GET /users/notifications
    */
-  @Get(':userId/notifications')
-  getMyNotifications(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getMyNotifications(userId);
+  @Get('notifications')
+  @UseGuards(JwtAuthGuard)
+  getMyNotifications(@CurrentUser() user: any) {
+    return this.userService.getMyNotifications(user.userId);
   }
 
   /**
    * Mark notification as read
-   * PUT /users/:userId/notifications/:notificationId/read
+   * PUT /users/notifications/:notificationId/read
    */
-  @Put(':userId/notifications/:notificationId/read')
+  @Put('notifications/:notificationId/read')
+  @UseGuards(JwtAuthGuard)
   markNotificationAsRead(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Param('notificationId', ParseIntPipe) notificationId: number
   ) {
-    return this.userService.markNotificationAsRead(userId, notificationId);
+    return this.userService.markNotificationAsRead(user.userId, notificationId);
   }
 
   // ==========================================
@@ -309,36 +334,39 @@ export class UserController {
 
   /**
    * Create player profile for a game
-   * POST /users/:userId/player-profiles
+   * POST /users/player-profiles
    */
-  @Post(':userId/player-profiles')
+  @Post('player-profiles')
+  @UseGuards(JwtAuthGuard)
   createPlayerProfile(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Body() createProfileDto: CreatePlayerProfileDto
   ) {
-    return this.userService.createPlayerProfile(userId, createProfileDto);
+    return this.userService.createPlayerProfile(user.userId, createProfileDto);
   }
 
   /**
    * Update player profile for a game
-   * PUT /users/:userId/player-profiles/:gameId
+   * PUT /users/player-profiles/:gameId
    */
-  @Put(':userId/player-profiles/:gameId')
+  @Put('player-profiles/:gameId')
+  @UseGuards(JwtAuthGuard)
   updatePlayerProfile(
-    @Param('userId', ParseIntPipe) userId: number,
+    @CurrentUser() user: any,
     @Param('gameId', ParseIntPipe) gameId: number,
     @Body() updateProfileDto: UpdatePlayerProfileDto
   ) {
-    return this.userService.updatePlayerProfile(userId, gameId, updateProfileDto);
+    return this.userService.updatePlayerProfile(user.userId, gameId, updateProfileDto);
   }
 
   /**
    * Get all player profiles for user
-   * GET /users/:userId/player-profiles
+   * GET /users/player-profiles
    */
-  @Get(':userId/player-profiles')
-  getPlayerProfiles(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userService.getPlayerProfiles(userId);
+  @Get('player-profiles')
+  @UseGuards(JwtAuthGuard)
+  getPlayerProfiles(@CurrentUser() user: any) {
+    return this.userService.getPlayerProfiles(user.userId);
   }
 
   // ==========================================
@@ -350,6 +378,7 @@ export class UserController {
    * GET /users/games
    */
   @Get('games')
+  @UseGuards(JwtAuthGuard)
   getAllGames() {
     return this.userService.getAllGames();
   }

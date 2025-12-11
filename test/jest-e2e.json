@@ -4,6 +4,15 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  }
+    "^.+\\.ts$": ["ts-jest", {
+      "tsconfig": "<rootDir>/../tsconfig.json"
+    }]
+  },
+  "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/../src/$1"
+  },
+  "testTimeout": 60000,
+  "forceExit": true,
+  "setupFiles": ["<rootDir>/jest.env.js"],
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"]
 }

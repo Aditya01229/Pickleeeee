@@ -1,6 +1,6 @@
 export class JoinOrganizationDto {
   organizationId: number;
-  role: 'manager' | 'player';
+  role?: 'super_manager' | 'manager' | 'follower';
 }
 
 export class CreateOrganizationDto {

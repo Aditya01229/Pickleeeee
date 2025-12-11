@@ -18,3 +18,12 @@ export class UpdateTeamDto {
   name?: string;
   captainUserId?: number;
 }
+
+export class RemoveTeamMemberDto {
+  teamId: number;
+  userId: number; // User to remove from team
+}
+
+export class LeaveTeamDto {
+  teamId: number;
+}

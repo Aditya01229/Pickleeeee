@@ -1,6 +1,7 @@
 // src/user/user.service.ts
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from '../auth/auth.service';
 import { 
   CreateUserDto, 
   LoginDto, 
@@ -11,15 +12,16 @@ import {
   CreateOrganizationDto
 } from './dto/organization.dto';
 import {
-  CreateTournamentDto,
-  AddCategoryDto,
-  RegisterTournamentDto
+  RegisterTournamentDto,
+  PayRegistrationDto
 } from './dto/tournament.dto';
 import {
   CreateTeamDto,
   InviteTeamMemberDto,
   RespondToTeamInviteDto,
-  UpdateTeamDto
+  UpdateTeamDto,
+  RemoveTeamMemberDto,
+  LeaveTeamDto
 } from './dto/team.dto';
 import {
   CreatePlayerProfileDto,
@@ -28,7 +30,10 @@ import {
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private authService: AuthService
+  ) {}
 
   // ==========================================
   // 1. AUTHENTICATION & USER MANAGEMENT
@@ -43,9 +48,30 @@ export class UserService {
       throw new BadRequestException('Email already registered');
     }
 
+    // Hash password before saving
+    const hashedPassword = await this.authService.hashPassword(createUserDto.password);
+
+    // Explicitly construct user data without password to avoid TypeScript issues
+    const userData = {
+      name: createUserDto.name,
+      email: createUserDto.email,
+      phone: createUserDto.phone,
+      avatarUrl: createUserDto.avatarUrl,
+    };
+
     return this.prisma.user.create({
-      data: createUserDto,
-      include: {
+      data: {
+        ...userData,
+        password: hashedPassword,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        avatarUrl: true,
+        createdAt: true,
+        updatedAt: true,
         orgMemberships: {
           include: {
             organization: true
@@ -56,30 +82,7 @@ export class UserService {
   }
 
   async login(loginDto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: loginDto.email },
-      include: {
-        orgMemberships: {
-          include: {
-            organization: true
-          }
-        },
-        playerProfiles: {
-          include: {
-            game: true
-          }
-        }
-      }
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    return {
-      user,
-      message: 'Login successful'
-    };
+    return this.authService.login(loginDto);
   }
 
   async getProfile(userId: number) {
@@ -147,7 +150,7 @@ export class UserService {
   // ==========================================
 
   async createOrganization(userId: number, createOrgDto: CreateOrganizationDto) {
-    // Create organization and automatically make the creator a manager
+    // Create organization and automatically make the creator a super_manager
     
     // Check if organization with this slug already exists
     const existingOrg = await this.prisma.organization.findUnique({
@@ -178,7 +181,7 @@ export class UserService {
         memberships: {
           create: {
             userId: userId,
-            role: 'manager'
+            role: 'super_manager'
           }
         }
       },
@@ -224,7 +227,7 @@ export class UserService {
       data: {
         userId: userId,
         orgId: joinOrgDto.organizationId,
-        role: joinOrgDto.role || 'player'
+        role: joinOrgDto.role || 'follower'
       },
       include: {
         organization: true,
@@ -251,132 +254,7 @@ export class UserService {
   }
 
   // ==========================================
-  // 3. TOURNAMENT MANAGEMENT (MANAGER)
-  // ==========================================
-
-  async createTournament(userId: number, createTournamentDto: CreateTournamentDto) {
-    // Verify organization exists
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: createTournamentDto.orgId }
-    });
-
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
-    }
-
-    // Verify user is a manager of the organization
-    const membership = await this.prisma.orgMembership.findUnique({
-      where: {
-        orgId_userId: {
-          orgId: createTournamentDto.orgId,
-          userId: userId
-        }
-      }
-    });
-
-    if (!membership || membership.role !== 'manager') {
-      throw new ForbiddenException('Only managers can create tournaments');
-    }
-
-    // Verify game exists
-    const game = await this.prisma.game.findUnique({
-      where: { id: createTournamentDto.gameId }
-    });
-
-    if (!game) {
-      throw new NotFoundException(`Game with ID ${createTournamentDto.gameId} not found. Please create games first or use SETUP_GUIDE.md to seed games.`);
-    }
-
-    // Check if tournament slug already exists in this organization
-    const existingTournament = await this.prisma.tournament.findUnique({
-      where: {
-        orgId_slug: {
-          orgId: createTournamentDto.orgId,
-          slug: createTournamentDto.slug
-        }
-      }
-    });
-
-    if (existingTournament) {
-      throw new BadRequestException(`Tournament with slug '${createTournamentDto.slug}' already exists in this organization`);
-    }
-
-    return this.prisma.tournament.create({
-      data: {
-        ...createTournamentDto,
-        createdBy: userId
-      },
-      include: {
-        organization: true,
-        game: true,
-        categories: true
-      }
-    });
-  }
-
-  async addTournamentCategory(userId: number, addCategoryDto: AddCategoryDto) {
-    // Verify user is tournament creator or manager
-    const tournament = await this.prisma.tournament.findUnique({
-      where: { id: addCategoryDto.tournamentId },
-      include: {
-        organization: {
-          include: {
-            memberships: {
-              where: { userId }
-            }
-          }
-        }
-      }
-    });
-
-    if (!tournament) {
-      throw new NotFoundException('Tournament not found');
-    }
-
-    const isCreator = tournament.createdBy === userId;
-    const isManager = tournament.organization.memberships.some(m => m.role === 'manager');
-
-    if (!isCreator && !isManager) {
-      throw new ForbiddenException('Not authorized to add categories');
-    }
-
-    return this.prisma.tournamentCategory.create({
-      data: addCategoryDto,
-      include: {
-        tournament: true
-      }
-    });
-  }
-
-  async getHostedTournaments(userId: number) {
-    return this.prisma.tournament.findMany({
-      where: { createdBy: userId },
-      include: {
-        organization: true,
-        game: true,
-        categories: {
-          include: {
-            _count: {
-              select: {
-                registrations: true,
-                teams: true
-              }
-            }
-          }
-        },
-        _count: {
-          select: {
-            registrations: true,
-            matches: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-  }
-
-  // ==========================================
-  // 4. TOURNAMENT REGISTRATION (PLAYER)
+  // 3. TOURNAMENT REGISTRATION (PLAYER)
   // ==========================================
 
   async registerForTournament(userId: number, registerDto: RegisterTournamentDto) {
@@ -513,6 +391,119 @@ export class UserService {
     }
   }
 
+  async payRegistration(userId: number, payDto: PayRegistrationDto) {
+    // Find the registration
+    const registration = await this.prisma.registration.findUnique({
+      where: { id: payDto.registrationId },
+      include: {
+        tournament: true,
+        category: true,
+        team: {
+          include: {
+            captain: true,
+            members: {
+              where: {
+                status: 'accepted'
+              },
+              include: {
+                user: true
+              }
+            }
+          }
+        },
+        user: true
+      }
+    });
+
+    if (!registration) {
+      throw new NotFoundException('Registration not found');
+    }
+
+    // Check if already paid
+    if (registration.paid) {
+      throw new BadRequestException('Registration fees have already been paid');
+    }
+
+    // Check if registration is cancelled
+    if (registration.status !== 'registered') {
+      throw new BadRequestException('Cannot pay for a cancelled registration');
+    }
+
+    // For team registrations, verify user is the captain
+    if (registration.teamId) {
+      if (!registration.team) {
+        throw new NotFoundException('Team not found');
+      }
+
+      if (registration.team.captainUserId !== userId) {
+        throw new ForbiddenException('Only team captain can pay registration fees');
+      }
+    } else {
+      // For individual registrations, verify user owns the registration
+      if (registration.userId !== userId) {
+        throw new ForbiddenException('You can only pay for your own registration');
+      }
+    }
+
+    // Update registration with payment
+    const updatedRegistration = await this.prisma.registration.update({
+      where: { id: payDto.registrationId },
+      data: {
+        paid: true,
+        paymentInfo: payDto.paymentInfo || {}
+      },
+      include: {
+        tournament: true,
+        category: true,
+        team: {
+          include: {
+            captain: true,
+            members: {
+              include: {
+                user: true
+              }
+            }
+          }
+        },
+        user: true
+      }
+    });
+
+    // Notify all team members if it's a team registration
+    if (registration.teamId && registration.team) {
+      const allMembers = [
+        registration.team.captain,
+        ...registration.team.members.map(m => m.user)
+      ];
+
+      for (const member of allMembers) {
+        await this.createNotification(
+          member.id,
+          'paymentConfirmed',
+          {
+            message: `Registration fees have been paid for ${registration.category?.name || 'tournament'}`,
+            tournamentId: registration.tournamentId,
+            categoryId: registration.categoryId,
+            teamId: registration.teamId
+          }
+        );
+      }
+    } else {
+      // Notify individual registrant
+      await this.createNotification(
+        userId,
+        'paymentConfirmed',
+        {
+          message: `Registration fees have been paid for ${registration.category?.name || 'tournament'}`,
+          tournamentId: registration.tournamentId,
+          categoryId: registration.categoryId
+        }
+      );
+    }
+
+    return updatedRegistration;
+  }
+
   async getMyRegistrations(userId: number) {
     return this.prisma.registration.findMany({
       where: { 
@@ -560,6 +551,40 @@ export class UserService {
       throw new BadRequestException('This category does not require teams');
     }
 
+    // Check if user is already in another team for this category
+    const userTeamsInCategory = await this.prisma.teamMember.findMany({
+      where: {
+        userId: userId,
+        team: {
+          categoryId: createTeamDto.categoryId
+        }
+      },
+      include: {
+        team: {
+          include: {
+            category: true
+          }
+        }
+      }
+    });
+
+    // Also check if user is captain of another team in same category
+    const userCaptainedTeams = await this.prisma.team.findMany({
+      where: {
+        captainUserId: userId,
+        categoryId: createTeamDto.categoryId
+      }
+    });
+
+    if (userTeamsInCategory.length > 0 || userCaptainedTeams.length > 0) {
+      const existingTeamName = userCaptainedTeams.length > 0 
+        ? userCaptainedTeams[0].name 
+        : userTeamsInCategory[0].team.name;
+      throw new BadRequestException(
+        `You are already in team "${existingTeamName}" for this category. A player can only be in one team per category.`
+      );
+    }
+
     const team = await this.prisma.team.create({
       data: {
         ...createTeamDto,
@@ -583,7 +608,11 @@ export class UserService {
   async inviteTeamMember(userId: number, inviteDto: InviteTeamMemberDto) {
     // Verify user is team captain
     const team = await this.prisma.team.findUnique({
-      where: { id: inviteDto.teamId }
+      where: { id: inviteDto.teamId },
+      include: {
+        category: true,
+        members: true
+      }
     });
 
     if (!team) {
@@ -608,6 +637,58 @@ export class UserService {
       throw new BadRequestException('User already invited or member');
     }
 
+    // Check if user is already in another team for the same category
+    if (team.categoryId) {
+      const userTeamsInCategory = await this.prisma.teamMember.findMany({
+        where: {
+          userId: inviteDto.userId,
+          team: {
+            categoryId: team.categoryId
+          }
+        },
+        include: {
+          team: {
+            include: {
+              category: true
+            }
+          }
+        }
+      });
+
+      // Also check if user is captain of another team in same category
+      const userCaptainedTeams = await this.prisma.team.findMany({
+        where: {
+          captainUserId: inviteDto.userId,
+          categoryId: team.categoryId
+        }
+      });
+
+      if (userTeamsInCategory.length > 0 || userCaptainedTeams.length > 0) {
+        const existingTeamName = userCaptainedTeams.length > 0 
+          ? userCaptainedTeams[0].name 
+          : userTeamsInCategory[0].team.name;
+        throw new BadRequestException(
+          `User is already in team "${existingTeamName}" for this category. A player can only be in one team per category.`
+        );
+      }
+    }
+
+    // Check teamSize limit from category settings
+    if (team.category) {
+      const categorySettings = (team.category.settings as any) || {};
+      const teamSize = categorySettings.teamSize;
+
+      if (teamSize) {
+        // Count current members (including captain + accepted + invited members)
+        // Captain is not in members table, so we count members + 1 for captain
+        const currentMemberCount = team.members.length + 1; // +1 for captain
+
+        if (currentMemberCount >= teamSize) {
+          throw new BadRequestException(`Team size limit reached. Maximum ${teamSize} members allowed (including captain).`);
+        }
+      }
+    }
+
     const teamMember = await this.prisma.teamMember.create({
       data: {
         teamId: inviteDto.teamId,
@@ -618,7 +699,8 @@ export class UserService {
         team: {
           include: {
             tournament: true,
-            captain: true
+            captain: true,
+            category: true
           }
         },
         user: true
@@ -730,6 +812,165 @@ export class UserService {
 
       return { message: 'Invitation declined' };
     }
+  }
+
+  async removeTeamMember(userId: number, removeDto: RemoveTeamMemberDto) {
+    // Verify user is team captain
+    const team = await this.prisma.team.findUnique({
+      where: { id: removeDto.teamId },
+      include: {
+        captain: true,
+        category: true,
+        registrations: {
+          where: {
+            status: 'registered'
+          }
+        }
+      }
+    });
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+
+    if (team.captainUserId !== userId) {
+      throw new ForbiddenException('Only team captain can remove members');
+    }
+
+    // Cannot remove the captain
+    if (removeDto.userId === team.captainUserId) {
+      throw new BadRequestException('Cannot remove the team captain');
+    }
+
+    // Check if team has paid registration - prevent removal if paid
+    const paidRegistration = team.registrations.find(reg => reg.paid === true);
+    if (paidRegistration) {
+      throw new ForbiddenException('Cannot remove team member after registration fees have been paid. Please contact the tournament organizer.');
+    }
+
+    // Find the team member to remove
+    const teamMember = await this.prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId: removeDto.teamId,
+          userId: removeDto.userId
+        }
+      },
+      include: {
+        user: true
+      }
+    });
+
+    if (!teamMember) {
+      throw new NotFoundException('Team member not found');
+    }
+
+    // Delete the team member
+    await this.prisma.teamMember.delete({
+      where: {
+        teamId_userId: {
+          teamId: removeDto.teamId,
+          userId: removeDto.userId
+        }
+      }
+    });
+
+    // Notify the removed user
+    await this.createNotification(
+      removeDto.userId,
+      'teamUpdate',
+      {
+        message: `You have been removed from team ${team.name}`,
+        teamId: team.id,
+        captainId: userId
+      }
+    );
+
+    return { 
+      message: `Team member ${teamMember.user.name} has been removed from the team`,
+      removedUserId: removeDto.userId
+    };
+  }
+
+  async leaveTeam(userId: number, leaveDto: LeaveTeamDto) {
+    // Find the team member record
+    const teamMember = await this.prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId: leaveDto.teamId,
+          userId: userId
+        }
+      },
+      include: {
+        team: {
+          include: {
+            captain: true,
+            category: true,
+            registrations: {
+              where: {
+                status: 'registered'
+              }
+            }
+          }
+        },
+        user: true
+      }
+    });
+
+    if (!teamMember) {
+      throw new NotFoundException('You are not a member of this team');
+    }
+
+    // Check if user is the captain (captains can't leave, they need to delete team or transfer captaincy)
+    if (teamMember.team.captainUserId === userId) {
+      throw new BadRequestException('Team captain cannot leave the team. Transfer captaincy or delete the team instead.');
+    }
+
+    // Check if member has already left (status is not 'accepted')
+    if (teamMember.status !== 'accepted') {
+      throw new BadRequestException('You are not an active member of this team');
+    }
+
+    // Check if team registration is paid - prevent leaving if paid
+    const teamRegistration = teamMember.team.registrations.find(
+      reg => reg.status === 'registered'
+    );
+    
+    if (teamRegistration && teamRegistration.paid) {
+      throw new ForbiddenException('Cannot leave team after registration fees have been paid. Please contact the tournament organizer.');
+    }
+    
+    // Check if team is registered - warn but allow leaving if not paid
+    const isTeamRegistered = teamMember.team.registrations.length > 0;
+    
+    // Delete the team member record
+    await this.prisma.teamMember.delete({
+      where: {
+        teamId_userId: {
+          teamId: leaveDto.teamId,
+          userId: userId
+        }
+      }
+    });
+
+    // Notify the captain
+    await this.createNotification(
+      teamMember.team.captainUserId,
+      'teamUpdate',
+      {
+        message: `${teamMember.user.name} has left team ${teamMember.team.name}`,
+        teamId: teamMember.team.id,
+        userId: userId
+      }
+    );
+
+    return { 
+      message: `You have successfully left team ${teamMember.team.name}`,
+      teamId: leaveDto.teamId,
+      warning: isTeamRegistered 
+        ? 'Note: This team is registered for a tournament. The captain may need to update the team roster.' 
+        : undefined
+    };
   }
 
   async getMyTeams(userId: number) {

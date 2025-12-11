@@ -10,9 +10,9 @@
 
 ### 🏢 2. Organization Management
 - [x] Create Organization (auto-assign as manager)
-- [x] Join Organization (as player or manager)
+- [x] Join Organization (as super_manager, manager, or follower)
 - [x] Get User's Organizations
-- [x] Role-based permissions (manager/player)
+- [x] Role-based permissions (super_manager/manager/follower)
 
 ### 🏆 3. Tournament Management (Manager Only)
 - [x] Create Tournament
@@ -177,6 +177,41 @@ QUICK_API_REFERENCE.md        # Quick copy-paste Postman requests
 - [x] Organization membership validation
 - [x] Notification privacy (users only see their own)
 - [x] Profile update restrictions
+
+---
+
+## 👔 MANAGER PERMISSIONS
+
+### Current Manager Permissions (Implemented)
+
+**Super Managers (`super_manager`):**
+- Can create tournaments
+- Can add tournament categories
+- Can manage other managers (planned, not yet implemented)
+
+**Managers (`manager`):**
+- Can create tournaments
+- Can add tournament categories
+
+**Followers (`follower`):**
+- Can view organization information
+- Can receive organization updates/notifications
+- Can register for tournaments (does not require organization membership)
+
+### Missing Manager Features (Not Yet Implemented)
+
+- [ ] Edit/delete tournaments
+- [ ] Edit/delete tournament categories
+- [ ] Manage organization settings (name, slug, branding, default game)
+- [ ] View/manage tournament registrations
+- [ ] Assign/remove other managers (super_manager only)
+- [ ] Promote/demote managers (super_manager only)
+- [ ] View organization analytics/statistics
+- [ ] Manage organization members (invite, remove)
+
+### Known Issues
+
+- **Bug in `addTournamentCategory` (Line 337)**: Previously checked if ANY manager exists in organization instead of checking if CURRENT user is manager. This has been fixed to properly check the current user's role.
 
 ---
 

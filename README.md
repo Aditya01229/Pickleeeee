@@ -28,7 +28,7 @@
 - id
 - org_id
 - user_id
-- role                 # org_admin | manager
+- role                 # super_manager | manager | follower
 - created_at
 
 ---

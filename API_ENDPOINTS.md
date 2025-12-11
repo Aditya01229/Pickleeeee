@@ -204,7 +204,7 @@ Create a new organization. User automatically becomes a manager.
 ### 2.2 Join Organization
 **POST** `/users/:userId/organizations/join`
 
-Join an existing organization as a player or manager.
+Join an existing organization as a follower, manager, or super_manager. If no role is specified, defaults to 'follower'.
 
 **Example:** `POST /users/1/organizations/join`
 
@@ -273,7 +273,7 @@ Before creating tournaments, you MUST have at least one game in your database. S
 ### 3.1 Create Tournament
 **POST** `/users/:userId/tournaments`
 
-Create a new tournament. Only managers can create tournaments.
+Create a new tournament. Only managers or super_managers can create tournaments.
 
 **Example:** `POST /users/1/tournaments`
 
@@ -1106,7 +1106,7 @@ Body: {"name": "Amit Shah", "email": "amit@example.com"}
 
 # Then user 2 joins the organization
 POST /users/2/organizations/join
-Body: {"organizationId": 10, "role": "player"}
+Body: {"organizationId": 10, "role": "follower"}
 
 # Now user 2 is a member of orgId 10
 ```
@@ -1170,7 +1170,11 @@ GET /users/1/notifications
 
 2. **User ID**: In real applications, the `userId` would come from the authentication token, not the URL parameter.
 
-3. **Manager Permissions**: Only users with `role="manager"` in an organization can create tournaments.
+3. **Manager Permissions**: 
+   - **Super Managers** (`super_manager`): Can create tournaments, add categories, and manage other managers (manager management not yet implemented)
+   - **Managers** (`manager`): Can create tournaments and add categories
+   - **Followers** (`follower`): Can view organization info and receive updates
+   - Only users with `role="manager"` or `role="super_manager"` in an organization can create tournaments.
 
 4. **Team Flow**: 
    - Captain creates team

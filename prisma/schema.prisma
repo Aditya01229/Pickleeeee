@@ -10,11 +10,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum OrgRole {
+  super_manager
+  manager
+  follower
+}
+
 // 1. Users
 model User {
   id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
+  password  String
   phone     String?
   avatarUrl String?  @map("avatar_url")
   createdAt DateTime @default(now()) @map("created_at")
@@ -57,7 +64,7 @@ model OrgMembership {
   id        Int      @id @default(autoincrement())
   orgId     Int      @map("org_id")
   userId    Int      @map("user_id")
-  role      String   // org_admin | manager
+  role      OrgRole  // super_manager | manager | follower
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
